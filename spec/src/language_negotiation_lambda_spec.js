@@ -12,9 +12,6 @@ describe( 'languageNegotiationLambda', function() {
                     "Host": [
                       "localhost"
                     ],
-                    "Cookie": [
-                      "SomeCookie=1; AnotherOne=A"
-                    ],
                     "User-Agent": [
                       "Test Agent"
                     ]
@@ -34,9 +31,62 @@ describe( 'languageNegotiationLambda', function() {
     var default_header = ['en'];
 
     beforeEach(function(){
+        delete event.Records[0].cf.request.headers["Cookie"];
         delete event.Records[0].cf.request.headers["Accept-Language"];
         delete event.Records[0].cf.request.headers["X-Accept-Language"];
     });
+
+    describe( 'Well formed cookies', function(){
+        [
+            { cookie: "en",     expected: "en" },
+            { cookie: "EN",     expected: "en" },
+            { cookie: "es",     expected: "es" },
+            { cookie: "ES",     expected: "es" },
+            { cookie: "en-US",  expected: "en" },
+            { cookie: "es-419", expected: "es" }
+        ].forEach( function( cookies ) {
+            it( `Resolves cookie ${cookies.cookie} to ${cookies.expected}`, function( done ) {
+                event.Records[0].cf.request.headers.Cookie = [
+                    process.env.LANGUAGE_COOKIE_NAME+"="+cookies.cookie
+                ];
+
+                languageNegotiationLambda.handler( event, { /* context */ }, (err, result) => {
+                    try {
+                        expect( err ).toBeNull();
+                        expect( result.headers['X-Accept-Language'] ).toEqual([cookies.expected]);
+                        done();
+                    }
+                    catch( error ) {
+                        done( error );
+                    }
+                });
+            });
+        });
+
+        [
+            "fr",
+            ""
+        ].forEach( function( cookie ) {
+            it( `Resolves unsupported cookie: ${cookie} to browser language`, function( done ) {
+                event.Records[0].cf.request.headers.Cookie = [
+                    process.env.LANGUAGE_COOKIE_NAME+"="+cookie
+                ];
+                event.Records[0].cf.request.headers['Accept-Language'] = ['es'];
+
+                languageNegotiationLambda.handler( event, { /* context */ }, (err, result) => {
+                    try {
+                        expect( err ).toBeNull();
+                        expect( result.headers['X-Accept-Language'] ).toEqual(['es']);
+                        done();
+                    }
+                    catch( error ) {
+                        done( error );
+                    }
+                });
+            });
+        });
+    });
+
     describe( 'Well formed headers', function(){
         [
             { header: "en",                   customHeader: "en" },
@@ -71,14 +121,59 @@ describe( 'languageNegotiationLambda', function() {
         });
     });
 
-
-    describe( 'malformed headers', function(){
+    describe( 'Malformed cookies', function(){
         [
-            "",
-            "dhbeiyu292dfiue2",
             undefined,
             NaN,
             null
+        ].forEach( function( cookie ) {
+            it( `Passes on cookie ${cookie} and uses browser language`, function( done ) {
+                event.Records[0].cf.request.headers.Cookie = [cookie];
+                event.Records[0].cf.request.headers['Accept-Language'] = ['es'];
+                spyOn(console, "log");
+
+                languageNegotiationLambda.handler( event, { /* context */ }, (err, result) => {
+                    try {
+                        expect( err ).toBeNull();
+                        expect( result.headers['X-Accept-Language'] ).toEqual(['es']);
+                        expect( console.log ).toHaveBeenCalled();
+                        done();
+                    }
+                    catch( error ) {
+                        done( error );
+                    }
+                });
+            });
+        });
+    });
+
+    describe( 'Malformed headers', function(){
+        [
+            undefined,
+            NaN,
+            null
+        ].forEach( function( header ) {
+            it( `Resolves header ${header} to default and logs error`, function( done ) {
+                event.Records[0].cf.request.headers['Accept-Language'] = [header];
+                spyOn(console, "log");
+
+                languageNegotiationLambda.handler( event, { /* context */ }, (err, result) => {
+                    try {
+                        expect( err ).toBeNull();
+                        expect( result.headers['X-Accept-Language'] ).toEqual(default_header);
+                        expect( console.log ).toHaveBeenCalled();
+                        done();
+                    }
+                    catch( error ) {
+                        done( error );
+                    }
+                });
+            });
+        });
+
+        [
+            "",
+            "dhbeiyu292dfiue2"
         ].forEach( function( header ) {
             it( `Resolves header ${header} to default`, function( done ) {
                 event.Records[0].cf.request.headers['Accept-Language'] = [header];
@@ -98,6 +193,26 @@ describe( 'languageNegotiationLambda', function() {
     });
 
     describe( 'Errors', function(){
+        it( `Truthy non-string Cookie value should error to log, but still set default`, function( done ) {
+            event.Records[0].cf.request.headers.Cookie = [{}];
+            spyOn(console, "log");
+
+            languageNegotiationLambda.handler( event, { /* context */ }, (err, result) => {
+                try {
+                    expect( err ).toBeNull();
+                    expect( result ).toBeTruthy();
+                    expect( result.headers['X-Accept-Language'] ).toEqual(default_header);
+                    expect( console.log ).toHaveBeenCalledWith(
+                        "Error fetching cookie data: TypeError: cookies_str.replace is not a function"
+                    );
+                    done();
+                }
+                catch( error ) {
+                    done( error );
+                }
+            });
+        });
+
         it( `Truthy non-string Accept-Language value should error to log, but still set default`, function( done ) {
             event.Records[0].cf.request.headers['Accept-Language'] = [{}];
             spyOn(console, "log");
@@ -108,7 +223,7 @@ describe( 'languageNegotiationLambda', function() {
                     expect( result ).toBeTruthy();
                     expect( result.headers['X-Accept-Language'] ).toEqual(default_header);
                     expect( console.log ).toHaveBeenCalledWith(
-                        "Error performing language negotiation: TypeError: headers[acceptLanguage][0].split is not a function"
+                        "Error fetching Accept-Language data: TypeError: language_str.split is not a function"
                     );
                     done();
                 }
