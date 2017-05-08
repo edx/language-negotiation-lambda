@@ -1,7 +1,8 @@
 language: node_js
-node_js:
-- iojs
-- '4'
+node_js: '4'
+before_deploy:
+  - ./deploy.sh
+
 deploy:
   provider: s3
   access_key_id:
@@ -9,8 +10,9 @@ deploy:
   secret_access_key:
     secure: Fk//DKgxBCD9Ew5SAdvGWH00HcEAhOrM3QD26gModHVESvI4OUMNiEmcU78WWTU/a37OoWbfFW0pxn654vG3GKQtPH4I5a+ntxXwDeu0rWTVm/f3gZ3Hzq4T4V6zt+PiwTvBA67zHl3l7HBQFb0tipv1bTOqiwodptbhWqMcuCqnN0y6fjfmCJcXHAOmR6Y6mS8XGoK1vWdhP7UGQ+fILjqme+UuBtjOFXSHemPzzGB1AVltrA0MX1QncnGk20YFRLNgdPfgfD0jbewO8WmW9OSofwY/QjiLGriefeat1vIm29BZ7vULdLv5n+YG3gD7BBjy6ijsfhpE5+P3/pmVzAdBbchLDPpHuclWtiAMkprNz1MBqnpl1GXW4Hc5UIxdCHHgq3GTbNDk2sUnIqens1OAbPw2/0AonPyrCAMTXmI+B9IeUf5n9c3wS7GfGwQhloU0dlN4U1b205Nx/1qdeRI6C/KqvqamJV1xiM03DPrFfVu60w2lefV5mpfvA/vsLXWbK/jcxSIB8w9ioxkuHTERLDXn74JMx3AOniirneFUPAjmmZqQ8RsqyqMsT3bDRa0ebalI6jFRadV8RiO6wQduD3icvxwyWNF5b9JXtyKLaZRs2LkEvBYrerF3M4IwIbKEEdXvtbxtHlCOHxM7MKWRLRRs/tEFz3cXyHiKDnk=
   bucket: edx-static
-  local_dir: src
+  local_dir: dist
   region: us-east-1
-  upload-dir: language-negotiation-lambda/
+  upload-dir: language-negotiation-lambda
+  acl: public_read
   on:
     tags: true
