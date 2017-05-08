@@ -23,8 +23,7 @@ exports.handler = (event, context, callback) => {
                 // expected format: q=0.8
                 sanitizedWeight = parseFloat(weight.substring(2)) || 0.0;
             }
-
-            if (supportedLanguages.includes(sanitizedLocale)){
+            if (supportedLanguages.indexOf(sanitizedLocale) >= 0){
                 selectableLanguages.push({
                     'locale': sanitizedLocale,
                     'weight': sanitizedWeight
@@ -36,20 +35,26 @@ exports.handler = (event, context, callback) => {
     }
 
     try {
-        if (headers[acceptLanguage]) {
-            var selectableLanguages = getSelectableLangugaes(headers[acceptLanguage].split(','));
-            var selectedLanguage = defaultLanguage;
+        headers[customHeaderName] = [defaultLanguage];
+    } catch(err) {
+         console.log("Error assigning default language: " + err);
+    }
+
+    try {
+        var selectedLanguage = defaultLanguage;
+        if (headers[acceptLanguage] && headers[acceptLanguage][0]) {
+            var selectableLanguages = getSelectableLangugaes(headers[acceptLanguage][0].split(','));
             if(selectableLanguages.length > 0) {
                 selectableLanguages.sort(function(a, b){
                     return a.weight - b.weight; // Sort Ascending
                 });
                 selectedLanguage = selectableLanguages.pop().locale;
             }
-
-            headers[customHeaderName] = selectedLanguage;
         }
+        headers[customHeaderName] = [selectedLanguage];
+    }
     catch(err) {
-        console.log("Error: " + err);
+        console.log("Error performing language negotiation: " + err);
     } finally {
         callback(null, request);
     }
