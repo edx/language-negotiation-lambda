@@ -35,17 +35,22 @@ exports.handler = (event, context, callback) => {
         return selectableLanguages;
     }
 
-    if (headers[acceptLanguage]) {
-        var selectableLanguages = getSelectableLangugaes(headers[acceptLanguage].split(','));
-        var selectedLanguage = defaultLanguage;
-        if(selectableLanguages.length > 0) {
-            selectableLanguages.sort(function(a, b){
-                return a.weight - b.weight; // Sort Ascending
-            });
-            selectedLanguage = selectableLanguages.pop().locale;
-        }
+    try {
+        if (headers[acceptLanguage]) {
+            var selectableLanguages = getSelectableLangugaes(headers[acceptLanguage].split(','));
+            var selectedLanguage = defaultLanguage;
+            if(selectableLanguages.length > 0) {
+                selectableLanguages.sort(function(a, b){
+                    return a.weight - b.weight; // Sort Ascending
+                });
+                selectedLanguage = selectableLanguages.pop().locale;
+            }
 
-        headers[customHeaderName] = selectedLanguage;
+            headers[customHeaderName] = selectedLanguage;
+        }
+    catch(err) {
+        console.log("Error: " + err);
+    } finally {
+        callback(null, request);
     }
-    callback(null, request);
 };
