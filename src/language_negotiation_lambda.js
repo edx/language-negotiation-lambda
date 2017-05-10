@@ -57,35 +57,50 @@ exports.handler = (event, context, callback) => {
         return selectableLanguages;
     }
 
-    const getCookieLanguage = function(cookies_str) {
+    const getCookieLanguage = function(cookies) {
         var languageCookieName,
             languageCookieValue,
+            locales,
             selectableLanguages,
-            re;
+            regexp;
 
-        languageCookieName = process.env.LANGUAGE_COOKIE_NAME;
-        re = new RegExp("(?:(?:^|.*;\\s*)" + languageCookieName + "\\s*\\=\\s*([^;]*).*$)|^.*$");
+        try{
+            languageCookieName = process.env.LANGUAGE_COOKIE_NAME;
+            // Regex from https://developer.mozilla.org/en-US/docs/Web/API/Document/cookie#Example_2_Get_a_sample_cookie_named_test2
+            regexp = new RegExp("(?:(?:^|.*;\\s*)" + languageCookieName + "\\s*\\=\\s*([^;]*).*$)|^.*$");
+            locales = [];
+            if(cookies){
+                cookies.forEach(function(cookies_str){
+                    languageCookieValue = cookies_str.replace(regexp, "$1");
+                    locales.push({ locale: sanitizeLocale(languageCookieValue) });
+                });
+            }
 
-        languageCookieValue = cookies_str.replace(re, "$1");
-
-        selectableLanguages = getSelectableLanguages(
-            [ { locale: sanitizeLocale(languageCookieValue) } ]
-        );
-
-        return getLocale(selectableLanguages);
+            return getLocale(getSelectableLanguages(locales));
+        } catch(err){
+            console.log("Error fetching cookie data: " + err);
+        }
     }
 
-    const getBrowserLanguage = function(language_str) {
-        var languages,
-            selectableLanguages;
+    const getBrowserLanguage = function(language_headers) {
+        var selectableLanguages = [];
 
-        languages = parseAcceptLanguage(language_str);
-        selectableLanguages = getSelectableLanguages(languages);
-        selectableLanguages.sort(function(a, b){
-            return a.weight - b.weight; // Sort Ascending
-        });
+        try{
+            if (language_headers) {
+                language_headers.forEach(function(language_str){
+                    var languages = parseAcceptLanguage(language_str);
+                    var selectable = getSelectableLanguages(languages);
+                    selectableLanguages = selectableLanguages.concat(selectable);
+                });
 
-        return getLocale(selectableLanguages);
+                selectableLanguages.sort(function(a, b){
+                    return a.weight - b.weight; // Sort Ascending
+                });
+                return getLocale(selectableLanguages);
+            }
+        } catch(err) {
+            console.log("Error fetching Accept-Language data: " + err);
+        }
     }
 
     const run = function() {
@@ -94,29 +109,13 @@ exports.handler = (event, context, callback) => {
             selectedLanguage;
 
         // Always set a default first in case we hit an error case.
-        try {
-            headers[customHeaderName] = [defaultLanguage];
-        } catch(err) {
-             console.log("Error assigning default language: " + err);
-        }
+        headers[customHeaderName] = [defaultLanguage];
 
-        // Attempt to fetch the cookie
-        try {
-            if (headers.Cookie) {
-                cookieLanguage = getCookieLanguage(headers.Cookie[0]);
-            }
-        } catch(err){
-            console.log("Error fetching cookie data: " + err);
-        }
+        // Fetch the cookie
+        cookieLanguage = getCookieLanguage(headers.Cookie);
 
-        // Attempt to fetch the browser language
-        try {
-            if (headers[acceptLanguage]) {
-                browserLanguage = getBrowserLanguage(headers[acceptLanguage][0]);
-            }
-        } catch(err) {
-            console.log("Error fetching Accept-Language data: " + err);
-        }
+        // Fetch the browser language
+        browserLanguage = getBrowserLanguage(headers[acceptLanguage]);
 
         // Set selected language in priortity order
         selectedLanguage = cookieLanguage || browserLanguage || defaultLanguage;

@@ -1,8 +1,7 @@
 {
   "name": "language-negotiator-lambda",
-  "version": "1.0.0",
   "description": "A JavaScript AWS lambda for negotiating language at the edge.",
-  "license": "GNU-3.0",
+  "license": "GPL-3.0",
   "repository": {
     "type": "git",
     "url": "git://github.com/edx/language-negotiator-lambda"
