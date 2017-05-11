@@ -3,26 +3,27 @@ exports.handler = (event, context, callback) => {
     const request = event.Records[0].cf.request;
     const headers = request.headers;
     const customHeaderName = 'X-Accept-Language';
+    const customRedirectHeaderName = 'X-Is-Redirect';
     const acceptLanguage = 'Accept-Language';
     const supportedLanguages = ['en', 'es'];
     const defaultLanguage = 'en';
 
-    const sanitizeLocale = function(raw_locale){
+    const sanitizeLocale = function (raw_locale) {
         return raw_locale.toLowerCase().substring(0, 2);
     }
 
-    const getLocale = function(selectableLanguages){
-        if(selectableLanguages.length > 0) {
+    const getLocale = function (selectableLanguages) {
+        if (selectableLanguages.length > 0) {
             return selectableLanguages.pop().locale;
         }
     }
 
-    const parseAcceptLanguage = function(language_str){
+    const parseAcceptLanguage = function (language_str) {
         var sanitizedLanguages = [],
             languages;
 
         languages = language_str.split(',');
-        languages.forEach(function(language){
+        languages.forEach(function (language) {
             var language_data = language.split(';');
 
             var locale = language_data[0];
@@ -46,10 +47,10 @@ exports.handler = (event, context, callback) => {
         return sanitizedLanguages;
     }
 
-    const getSelectableLanguages = function(languages){
+    const getSelectableLanguages = function (languages) {
         var selectableLanguages = [];
-        languages.forEach(function(language){
-            if (supportedLanguages.indexOf(language.locale) >= 0){
+        languages.forEach(function (language) {
+            if (supportedLanguages.indexOf(language.locale) >= 0) {
                 selectableLanguages.push(language);
             }
         });
@@ -57,53 +58,60 @@ exports.handler = (event, context, callback) => {
         return selectableLanguages;
     }
 
-    const getCookieLanguage = function(cookies) {
+    const getCookieLanguage = function (cookies) {
         var languageCookieName,
             languageCookieValue,
             locales,
             selectableLanguages,
             regexp;
 
-        try{
+        try {
             languageCookieName = process.env.LANGUAGE_COOKIE_NAME;
             // Regex from https://developer.mozilla.org/en-US/docs/Web/API/Document/cookie#Example_2_Get_a_sample_cookie_named_test2
             regexp = new RegExp("(?:(?:^|.*;\\s*)" + languageCookieName + "\\s*\\=\\s*([^;]*).*$)|^.*$");
             locales = [];
-            if(cookies){
-                cookies.forEach(function(cookies_str){
+            if (cookies) {
+                cookies.forEach(function (cookies_str) {
                     languageCookieValue = cookies_str.replace(regexp, "$1");
-                    locales.push({ locale: sanitizeLocale(languageCookieValue) });
+                    locales.push({locale: sanitizeLocale(languageCookieValue)});
                 });
             }
 
             return getLocale(getSelectableLanguages(locales));
-        } catch(err){
+        } catch (err) {
             console.log("Error fetching cookie data: " + err);
         }
     }
 
-    const getBrowserLanguage = function(language_headers) {
+    const getBrowserLanguage = function (language_headers) {
         var selectableLanguages = [];
 
-        try{
+        try {
             if (language_headers) {
-                language_headers.forEach(function(language_str){
+                language_headers.forEach(function (language_str) {
                     var languages = parseAcceptLanguage(language_str);
                     var selectable = getSelectableLanguages(languages);
                     selectableLanguages = selectableLanguages.concat(selectable);
                 });
 
-                selectableLanguages.sort(function(a, b){
+                selectableLanguages.sort(function (a, b) {
                     return a.weight - b.weight; // Sort Ascending
                 });
                 return getLocale(selectableLanguages);
             }
-        } catch(err) {
+        } catch (err) {
             console.log("Error fetching Accept-Language data: " + err);
         }
     }
 
-    const run = function() {
+    const shouldRedirect = function (selectedLanguage) {
+        if (selectedLanguage === "es" && request.uri.replace(/\//g, "") === "") {
+            return true;
+        }
+        return false;
+    }
+
+    const run = function () {
         var cookieLanguage,
             browserLanguage,
             selectedLanguage;
@@ -120,13 +128,18 @@ exports.handler = (event, context, callback) => {
         // Set selected language in priortity order
         selectedLanguage = cookieLanguage || browserLanguage || defaultLanguage;
         headers[customHeaderName] = [selectedLanguage];
+
+        if (shouldRedirect(selectedLanguage)) {
+            request.uri = "/es";
+            headers[customRedirectHeaderName] = true;
+        }
     }
 
     // Run main language negotiation method
     try {
         run();
     }
-    catch(err) {
+    catch (err) {
         console.log("Error performing language negotiation: " + err);
     } finally {
         callback(null, request);
